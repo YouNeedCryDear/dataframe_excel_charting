@@ -6,6 +6,7 @@ Created on Aug 5, 2018
 # import xlsxwriter
 from xlsxwriter import worksheet
 from xlsxwriter import utility 
+import copy
 
 class SheetTemplates(object):
     '''
@@ -18,6 +19,41 @@ class SheetTemplates(object):
         Constructor
         '''
         self.workbook = workbook
+        self.tables_info = {
+            1: {
+                "title": {
+                    "name": "COMPETITION ANALYSIS", 
+                    "cells_range": "B1:L1"
+                },
+                "sub_title": {
+                    "name": "[SPACO:XXXX]", 
+                    "cells_range": "B2:L2"
+                }, 
+                "cells_range": "B1:L11"
+            }, 
+            2: {
+                "title":{
+                    "name": "Country TAM Analysis", 
+                    "cells_range": "B1:K1"
+                },
+                "sub_title": {
+                    "name": "[SPACO:XXXX]", 
+                    "cells_range": "B2:K2"
+                }, 
+                "cells_range": "B1:K16"
+            }, 
+            3: {
+                "title":{
+                    "name": "Network Analysis", 
+                    "cells_range": "B1:I1"
+                },
+                "sub_title": {
+                    "name": "[SPACO:XXXX]", 
+                    "cells_range": "B2:I2"
+                }, 
+                "cells_range": "B1:I25"
+            }
+        }
         
     def createWorkSheet(self, worksheet_name):
         """Create Work Sheet
@@ -225,18 +261,14 @@ class SheetTemplates(object):
                         2: Country TAM Analysis-PER
                         3: Network Analysis
         """
+        table_info = self.tables_info[table_type]
         border_format = self.workbook.add_format({
                             'border':1,
                             'align': "right", 
                             'font_size':10
                            })
         cell_format = { 'type' : 'no_blanks' , 'format' : border_format}
-        if table_type == 1:
-            worksheet.conditional_format("B1:L11", cell_format)
-        elif table_type == 2:
-            worksheet.conditional_format("B1:K16", cell_format)
-        elif table_type == 3:
-            worksheet.conditional_format("B1:I25", cell_format)
+        worksheet.conditional_format(table_info["cells_range"], cell_format)
             
     def writeFormulaToCell(self, worksheet, cell, formula):
         """Write Formula to Cell
@@ -413,21 +445,39 @@ class SheetTemplates(object):
                     self.writeFormulaToCell(worksheet, cell, formula)
                     i += 1
             
-    def competitionAnalysis(self, worksheet_name, base_sheet_name):
-        """Competition Analysis
+    def writeTableToSheet(self, worksheet_name, table_type, **kwargs):
+        """Write Table To Sheet
         
+        Return:
+            worksheet object
         """
         try:
             worksheet = self.openWorkSheet(worksheet_name)
         except AssertionError:
             worksheet = self.createWorkSheet(worksheet_name)
+        # get table's info
+        table_info = copy.deepcopy(self.tables_info[table_type])
+        # parse **kwargs for title name 
+        if kwargs is not None:
+            if "country" in kwargs.keys():
+                table_info["title"]["name"] = "{0} - {1}".format(table_info["title"]["name"], kwargs["country"])
+            elif "partner_name" in kwargs.keys():
+                table_info["title"]["name"] = "{0}: Partner = {1}".format(table_info["title"]["name"], kwargs["partner_name"])
         # write title and note on 1st and 2nd rows
-        self.mergeCellsAndWrite(worksheet, "B1:L1", "COMPETITION ANALYSIS")
-        self.mergeCellsAndWrite(worksheet, "B2:L2", "[SPACO:XXXX]")
+        self.mergeCellsAndWrite(worksheet, table_info["title"]["cells_range"], table_info["title"]["name"])
+        self.mergeCellsAndWrite(worksheet, table_info["sub_title"]["cells_range"], table_info["sub_title"]["cells_range"])
         # write table frame
-        self.writeTableFrame(worksheet, table_type=1)
+        self.writeTableFrame(worksheet, table_type)
         # set border
-        self.setTableBorder(worksheet, table_type=1)
+        self.setTableBorder(worksheet, table_type)
+        return worksheet
+        
+    def competitionAnalysis(self, worksheet_name, base_sheet_name):
+        """Competition Analysis
+        
+        """
+        # write table to cell
+        worksheet = self.writeTableToSheet(worksheet_name, 1)
         # insert formula
         self.writeFormulaToCell(worksheet, "C7", "=SUM('{}'!F2:F8)".format(base_sheet_name))
         
@@ -435,18 +485,8 @@ class SheetTemplates(object):
         """Country TAM Analysis
         
         """
-        try:
-            worksheet = self.openWorkSheet(worksheet_name)
-        except AssertionError:
-            worksheet = self.createWorkSheet(worksheet_name)
-        # write title and note on 1st and 2nd rows
-        self.mergeCellsAndWrite(worksheet, "B1:K1", "Country TAM Analysis-{}".format(country))
-        self.mergeCellsAndWrite(worksheet, "B2:K2", "[SPACO:XXXX]")
-        # write table frame
-        self.writeTableFrame(worksheet, table_type=2)
-        # set border
-        self.setTableBorder(worksheet, table_type=2)
-        
+        # write table to cell
+        worksheet = self.writeTableToSheet(worksheet_name, 2, country=country)
         # insert formula sum
         self.writeColumnSum(
             worksheet, 
@@ -516,16 +556,6 @@ class SheetTemplates(object):
         """Network Analysis
         
         """
-        try:
-            worksheet = self.openWorkSheet(worksheet_name)
-        except AssertionError:
-            worksheet = self.createWorkSheet(worksheet_name)
-        # write title and note on 1st and 2nd rows
-        self.mergeCellsAndWrite(worksheet, "B1:I1", "Network Analysis: Partner = {}".format(partner_name))
-        self.mergeCellsAndWrite(worksheet, "B2:I2", "[SPACO:XXXX]")
-        # write table frame
-        self.writeTableFrame(worksheet, table_type=3)
-        # set border
-        self.setTableBorder(worksheet, table_type=3)
+        worksheet = self.writeTableToSheet(worksheet_name, 3, partner_name=partner_name)
         # insert formula
         self.writeFormulaToCell(worksheet, "C5", "=SUM('{}'!F2:F8)".format(base_sheet_name))
